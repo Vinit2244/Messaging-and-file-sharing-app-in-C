@@ -1,0 +1,9 @@
+pip install customtkinter
+pip install CTKMessageBox
+
+
+
+brew update
+brew install curl
+brew install jansson
+
