@@ -199,6 +199,14 @@ void* serve_request(void* args)
                 // Checking for password
                 if (strcmp(clients_list[i].client_password, recvd_request.data) == 0)
                 {
+                    if (clients_list[i].online == ONLINE)
+                    {
+                        // Client is already online
+                        send_ack(SIGNIN_FAILED, sock_fd, REDB("Client is already online\n"));
+                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, SIGNIN_FAILED, recvd_request.username, recvd_request.ip);
+                        goto End;
+                    }
+                    
                     // Password matched
                     send_ack(ACK, sock_fd, BHGREEN("Successfully signed in\n"));
                     insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, ACK, recvd_request.username, recvd_request.ip);
@@ -402,7 +410,7 @@ void* serve_request(void* args)
                         int sent_msg_size;
                         if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
                         {
-                            fprintf(stderr, REDB("send : could not send data to client : %s\n"), strerror(errno));
+                            fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
                             send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
                             insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
                             goto End;
@@ -420,7 +428,6 @@ void* serve_request(void* args)
                         if (intermediate_st.request_type == FAIL)
                         {
                             printf(RED("Client failed to receive image\n"));
-                            send_ack(FAIL, client2_sock_fd, NULL);
                             break;
                         }                
                     }

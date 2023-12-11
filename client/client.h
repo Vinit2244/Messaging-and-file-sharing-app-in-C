@@ -16,10 +16,14 @@ int send_signout_req();
 int send_delete_account_req();
 void handleCtrlC(int signum);
 void print_menu();
+int check_if_user_is_online(const int socket_fd, const int data_type, const char* to_username);
+void menu();
+void ask_signin_or_signup();
 
 void* receive_client_data(void* args);
 
 extern struct sockaddr_in client_address;       // IPv4 address struct for TCP communication between ss and nfs (requests)
 extern int client_sock_fd;
+extern int logged_in;
 
 #endif

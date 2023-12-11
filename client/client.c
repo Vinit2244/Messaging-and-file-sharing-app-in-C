@@ -5,6 +5,7 @@ int client_sock_fd;
 
 int client_receiving_port_n = 0;
 int credentials_saved = 0;
+int logged_in = 0;
 char* my_ip = NULL;
 char clear[10] = {0};
 
@@ -30,8 +31,6 @@ int main(int argc, char* argv[])
     pthread_t client_receiving_thread;
     pthread_create(&client_receiving_thread, NULL, receive_client_data, NULL);
 
-    int choice;
-
     // Getting the ip info
     my_ip = "0.0.0.0";
 
@@ -39,347 +38,54 @@ int main(int argc, char* argv[])
     // my_ip = get_my_ip();
     // if (my_ip == NULL)
     // {
-    //     fprintf(stderr, REDHB("Could not get the ip address of the client\n"));
+    //     fprintf(stderr, RED("Could not get the ip address of the client\n"));
     //     exit(EXIT_FAILURE);
     // }
 
     printf(GREEN("Your ip is : %s\n"), my_ip);
     press_enter_to_contiue();
 
-    // First try to read the credentials from the file, if not available then ask for the credentials
-    FILE* fp = fopen("credentials.txt", "r");
-    if (fp == NULL)
+    while (1)
     {
-ASK_SIGNIN_OR_SIGNUP:
-        // Clear the terminal
-        system(clear);
-
-        // No credentials file found
-        // Asking user if he wants to signin or signup
-        printf(PINK("What do you want to do?\n1. Signin\n2. Signup\n"));
-        printf(YELLOW("\nEnter your choice: "));
-        scanf("%d", &choice);
-
-        if (choice == 1)
+        if (logged_in == 1)
         {
-            // Signin
-            memset(username, 0, sizeof(username));
-            memset(password, 0, sizeof(password));
-
-            // Asking for username and password
-            printf(BLUE("\nEnter the username(email): "));
-            scanf("%s", username);
-            printf(BLUE("Enter the password: "));
-            scanf("%s", password);
-
-            // Sends sign in request to the server and then checks if the signin suceeded or not
-            int result = send_signin_req(); // Send the signin request to the server and then check if the signin suceeded or not
-            press_enter_to_contiue();
-
-            if (result == 0)
-            {
-                // sign in is successful
-                if (credentials_saved == 0)
-                    ask_to_save_credentials();
-                goto SIGNIN_SUCCESSFUL;
-            }
-            else
-            {
-                // sign in failed
-                goto ASK_SIGNIN_OR_SIGNUP;
-            }
-        }
-        else if (choice == 2)
-        {
-            // Signup
-            memset(username, 0, sizeof(username));
-            memset(password, 0, sizeof(password));
-            printf(BLUE("\nEnter the username(email): "));
-            scanf("%s", username);
-            printf(BLUE("Enter the password: "));
-            scanf("%s", password);
-
-            int result = send_signup_req(); // Register the new username and password and then check if the registration suceeded or not
-            press_enter_to_contiue();
-
-            if (result == 0)
-            {
-                // sign up is successful
-                ask_to_save_credentials();
-                goto SIGNIN_SUCCESSFUL;
-            }
-            else
-            {
-                // sign up failed
-                goto ASK_SIGNIN_OR_SIGNUP;
-            }
+            menu();
         }
         else
         {
-            char temp[100];
-            printf(REDHB("Invalid choice\n"));
-            press_enter_to_contiue();
-            goto ASK_SIGNIN_OR_SIGNUP;
-        }
-    }
-    else
-    {
-        credentials_saved = 1;
-        // Credentials file found
-        // Read the credentials from the file
-        memset(username, 0, sizeof(username));
-        memset(password, 0, sizeof(password));
-        fscanf(fp, "%s\n%s\n", username, password);
-        fclose(fp);
+            // First try to read the credentials from the file, if not available then ask for the credentials
+            FILE* fp = fopen("credentials.txt", "r");
 
-        int result = send_signin_req();
-        if (result != 0)
-        {
-            // If the signin fails it means the credentials stored are not right so just remove that file
-            remove("credentials.txt");
-            goto ASK_SIGNIN_OR_SIGNUP;
-        }
-        else
-        {
-            // Signin successful
-            goto SIGNIN_SUCCESSFUL;
-        }
-    }
-SIGNIN_SUCCESSFUL:
-    // Signin successful
-    print_menu();
-
-    int choice2;
-    printf(YELLOW("\nEnter your choice: "));
-    scanf("%d", &choice2);
-
-    printf("\n");
-
-    if (choice2 == 1)
-    {
-        // Send message
-        printf("Enter the username of the person you want to send the message to: ");
-        char to_username[1024] = {0};
-        scanf("%s", to_username);
-
-        printf("Enter the message: ");
-        char message[1024] = {0};
-        scanf("%s", message);
-
-    }
-    else if (choice2 == 2)
-    {
-        // Send file
-    }
-    else if (choice2 == 3)
-    {
-        // Send image
-        printf("Enter the username of the person you want to send the image to: ");
-        char to_username[1024] = {0};
-        scanf("%s", to_username);
-
-        st_request image_req_st;
-        image_req_st.request_type = SEND_IMG;
-        memset(image_req_st.send_from_username, 0, sizeof(image_req_st.send_from_username));
-        memset(image_req_st.send_to_username, 0, sizeof(image_req_st.send_to_username));
-
-        strcpy(image_req_st.send_from_username, username);
-        strcpy(image_req_st.send_to_username, to_username);
-
-        memset(image_req_st.data, 0, MAX_DATA_LEN);
-
-        int socket_fd = connect_to_server();
-
-        // Sending the Send Image request
-        int sent_msg_size;
-        if ((sent_msg_size = send(socket_fd, (request) &image_req_st, sizeof(st_request), 0)) < 0)
-        {
-            fprintf(stderr, REDHB("send : could not send client Send Image request : %s\n"), strerror(errno));
-            press_enter_to_contiue();
-            goto SIGNIN_SUCCESSFUL;
-        }
-
-        // Receiving the response
-        int recvd_msg_size;
-        st_request image_response_st;
-        if ((recvd_msg_size = recv(socket_fd, (request) &image_response_st, sizeof(st_request), 0)) < 0)
-        {
-            fprintf(stderr, REDHB("recv : could not recv client Send Image request : %s\n"), strerror(errno));
-            press_enter_to_contiue();
-            goto SIGNIN_SUCCESSFUL;
-        }
-
-        if (image_response_st.request_type == ACK)
-        {
-            printf(GREEN("User to be sent image to found!\n"));
-
-            // Send Image request successful
-            // Image can be sent
-            printf("Enter the path of the image: ");
-            char image_path[1024] = {0};
-            scanf("%s", image_path);
-
-            printf(GREEN("Sending image...\n"));
-
-            FILE* image = fopen(image_path, "rb");
-            if (image == NULL)
+            if (fp == NULL)
             {
-                fprintf(stderr, REDHB("fopen : could not open the image file : %s\n"), strerror(errno));
-                st_request failed_st;
-                failed_st.request_type = FAIL;
-                send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0);
-                close(socket_fd);
-                press_enter_to_contiue();
-                goto SIGNIN_SUCCESSFUL;
+                ask_signin_or_signup();
             }
-
-            // Send the image data
-            st_request image_data;
-            image_data.request_type = IMG_DATA;
-            memset(image_data.data, 0, MAX_DATA_LEN);
-            memset(image_data.send_from_username, 0, sizeof(image_data.send_from_username));
-            memset(image_data.send_to_username, 0, sizeof(image_data.send_to_username));
-
-            strcpy(image_data.send_from_username, username);
-            strcpy(image_data.send_to_username, to_username);
-
-            char** tkns = tokenize(image_path, '/');
-            char* img_name_with_extension = NULL;
-
-            int i = 0;
-            while (tkns[i] != NULL)
+            else
             {
-                img_name_with_extension = tkns[i];
-                i++;
-            }
+                // Credentials file found
+                credentials_saved = 1;
+                // Read the credentials from the file
+                memset(username, 0, sizeof(username));
+                memset(password, 0, sizeof(password));
+                fscanf(fp, "%s\n%s\n", username, password);
+                fclose(fp);
 
-            char** tkns2 = tokenize(img_name_with_extension, '.');
-            char* name = tkns2[0];
-            char* ext = tkns2[1];
-
-            sprintf(image_data.data, "%s_received|%s", name, ext); // <Image name>|<Image extension>
-
-            free_tokens(tkns2);
-            free_tokens(tkns);
-
-            // int bytesRead = fread(image_data.data, 1, MAX_DATA_LEN, image);
-            // if (bytesRead <= 0)
-            // {
-            //     fprintf(stderr, REDHB("fread : could not read the image file : %s\n"), strerror(errno));
-            //     st_request failed_st;
-            //     failed_st.request_type = FAIL;
-            //     send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0);
-            //     close(socket_fd);
-            //     press_enter_to_contiue();
-            //     goto SIGNIN_SUCCESSFUL;
-            // }
-
-            send(socket_fd, (request) &image_data, sizeof(st_request), 0);
-            printf("Sent image name packet\n");
-
-            while(1)
-            {
-                memset(image_data.data, 0, MAX_DATA_LEN);
-                int bytes_read = fread(image_data.data, 1, MAX_DATA_LEN, image);
-                if (bytes_read <= 0)
+                // Send signin request and see if the credentials saved are valid or not
+                int result = send_signin_req();
+                if (result != 0)
                 {
-                    break;
+                    printf(RESET_COLOR);
+                    // If the signin fails it means the credentials stored are not right so just remove that file and ask for signin or signup
+                    remove("credentials.txt");
+                    ask_signin_or_signup();
                 }
-                send(socket_fd, (request) &image_data, sizeof(st_request), 0);
-                printf("Sent image packet\n");
-            }
-
-            // Send the end of image data
-            st_request image_data_end;
-            image_data_end.request_type = IMG_DATA_END;
-
-            send(socket_fd, (request) &image_data_end, sizeof(st_request), 0);
-
-            fclose(image);
-
-            printf(GREEN("Image sent successfully!\n"));
-            press_enter_to_contiue();
-            goto SIGNIN_SUCCESSFUL;
-        }
-        else
-        {
-            // Send Image request failed
-            printf(REDHB("Send Image request failed!\n"));
-            printf(REDHB("Reason: %s"), image_response_st.data);
-            close(socket_fd);
-            press_enter_to_contiue();
-            goto SIGNIN_SUCCESSFUL;
-        }
-    }
-    else if (choice2 == 4)
-    {
-        // signout
-        printf(ORANGE("Signing out...\n"));
-        int result = send_signout_req();
-        press_enter_to_contiue();
-        if (result == 0)
-        {
-            goto ASK_SIGNIN_OR_SIGNUP;
-        }
-        else
-        {
-            goto SIGNIN_SUCCESSFUL;
-        }
-    }
-    else if (choice2 == 5)
-    {
-        // Delete account
-        printf(REDHB("Are you sure you want to delete your account? (y/n): "));
-        char temp[2] = {0};
-        scanf("%s", temp);
-        if (strcmp(temp, "y") == 0)
-        {
-            printf("Enter your password to confirm: ");
-            char entered_password[1024];
-            scanf("%s", entered_password);
-            if (strcmp(entered_password, password) != 0)
-            {
-                printf(REDHB("Incorrect password\n"));
-                press_enter_to_contiue();
-                goto SIGNIN_SUCCESSFUL;
-            }
-            int result = send_delete_account_req();
-            if (result == 0)
-            {
-                // Account deleted succesfully
-                remove("credentials.txt");
-                credentials_saved = 0;
-                press_enter_to_contiue();
-                goto ASK_SIGNIN_OR_SIGNUP;
-            }
-            else
-            {
-                // Account deletion failed
-                press_enter_to_contiue();
-                goto SIGNIN_SUCCESSFUL;
+                else
+                {
+                    // Signin successful
+                    logged_in = 1;
+                }
             }
         }
-        else
-            goto SIGNIN_SUCCESSFUL;
-    }
-    else if (choice2 == 6)
-    {
-        // exit
-        printf(ORANGE("Exiting...\n"));
-        int result;
-        while ((result = send_signout_req()) != 0)
-        {
-            ;   // Continue
-        }
-        printf(GREEN("Exitted!\n"));
-        press_enter_to_contiue();
-        exit(EXIT_SUCCESS);
-    }
-    else
-    {
-        printf(REDHB("Invalid choice\n"));
-        press_enter_to_contiue();
-        goto SIGNIN_SUCCESSFUL;
     }
 
     return 0;
@@ -390,13 +96,11 @@ int send_signup_req()
 {
     // Preparing the request to be sent
     st_request signup_req_st;
+    memset(&signup_req_st, 0, sizeof(st_request));
     signup_req_st.request_type = SIGNUP;
     signup_req_st.recv_port_no = client_receiving_port_n;
-    memset(signup_req_st.ip, 0, sizeof(signup_req_st.ip));
-    memset(signup_req_st.username, 0, sizeof(signup_req_st.username));
     strcpy(signup_req_st.ip, my_ip);
     strcpy(signup_req_st.username, username);
-    memset(signup_req_st.data, 0, MAX_DATA_LEN);
 
     sprintf(signup_req_st.data, "%s", password); // <My password>
 
@@ -406,7 +110,7 @@ int send_signup_req()
     int sent_msg_size;
     if ((sent_msg_size = send(socket_fd, (request) &signup_req_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("send : could not send client Sign Up request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("send : could not send client Sign Up request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -414,7 +118,7 @@ int send_signup_req()
     st_request signup_response_st;
     if ((recvd_msg_size = recv(socket_fd, (request) &signup_response_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("recv : could not recv client Sign Up request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("recv : could not recv client Sign Up request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -426,8 +130,8 @@ int send_signup_req()
     else
     {
         // Sign Up failed
-        printf(REDHB("Sign Up failed!\n"));
-        printf(REDHB("Reason: %s"), signup_response_st.data);
+        printf(RED("Sign Up failed!\n"));
+        printf(RED("Reason: %s"), signup_response_st.data);
         close(socket_fd);
         return 1;
     }
@@ -442,10 +146,9 @@ int send_signup_req()
 int send_signout_req()
 {
     st_request signout_req_st;
+    memset(&signout_req_st, 0, sizeof(st_request));
     signout_req_st.request_type = SIGNOUT;
     signout_req_st.recv_port_no = client_receiving_port_n;
-    memset(signout_req_st.ip, 0, sizeof(signout_req_st.ip));
-    memset(signout_req_st.username, 0, sizeof(signout_req_st.username));
     strcpy(signout_req_st.ip, my_ip);
     strcpy(signout_req_st.username, username);
 
@@ -455,7 +158,7 @@ int send_signout_req()
     int sent_msg_size;
     if ((sent_msg_size = send(socket_fd, (request) &signout_req_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("send : could not send client Sign Out request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("send : could not send client Sign Out request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -463,7 +166,7 @@ int send_signout_req()
     st_request signout_response_st;
     if ((recvd_msg_size = recv(socket_fd, (request) &signout_response_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("recv : could not recv client Sign Out request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("recv : could not recv client Sign Out request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -475,8 +178,8 @@ int send_signout_req()
     else
     {
         // Sign Out failed
-        printf(REDHB("Sign Out failed!\n"));
-        printf(REDHB("Reason: %s"), signout_response_st.data);
+        printf(RED("Sign Out failed!\n"));
+        printf(RED("Reason: %s"), signout_response_st.data);
         close(socket_fd);
         return 1;
     }
@@ -492,14 +195,11 @@ int send_signin_req()
 {
     // Preparing the request to be sent
     st_request signin_req_st;
+    memset(&signin_req_st, 0, sizeof(st_request));
     signin_req_st.request_type = SIGNIN;
     signin_req_st.recv_port_no = client_receiving_port_n;
-    memset(signin_req_st.ip, 0, sizeof(signin_req_st.ip));
-    memset(signin_req_st.username, 0, sizeof(signin_req_st.username));
     strcpy(signin_req_st.ip, my_ip);
     strcpy(signin_req_st.username, username);
-    memset(signin_req_st.data, 0, MAX_DATA_LEN);
-
     sprintf(signin_req_st.data, "%s", password); // <My password>
  
     int socket_fd = connect_to_server();
@@ -508,7 +208,7 @@ int send_signin_req()
     int sent_msg_size;
     if ((sent_msg_size = send(socket_fd, (request) &signin_req_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("send : could not send client Sign In request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("send : could not send client Sign In request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -516,7 +216,7 @@ int send_signin_req()
     st_request signin_response_st;
     if ((recvd_msg_size = recv(socket_fd, (request) &signin_response_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("recv : could not recv client Sign In request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("recv : could not recv client Sign In request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -528,8 +228,8 @@ int send_signin_req()
     else
     {
         // Sign In failed
-        printf(REDHB("Sign In failed!\n"));
-        printf(REDHB("Reason: %s"), signin_response_st.data);
+        printf(RED("Sign In failed!\n"));
+        printf(RED("Reason: %s"), signin_response_st.data);
         close(socket_fd);
         return 1;
     }
@@ -544,14 +244,11 @@ int send_signin_req()
 int send_delete_account_req()
 {
     st_request delete_account_req_st;
+    memset(&delete_account_req_st, 0, sizeof(st_request));
     delete_account_req_st.request_type = DELETE_ACCOUNT;
     delete_account_req_st.recv_port_no = client_receiving_port_n;
-    memset(delete_account_req_st.ip, 0, sizeof(delete_account_req_st.ip));
-    memset(delete_account_req_st.username, 0, sizeof(delete_account_req_st.username));
     strcpy(delete_account_req_st.ip, my_ip);
     strcpy(delete_account_req_st.username, username);
-
-    memset(delete_account_req_st.data, 0, MAX_DATA_LEN);
     sprintf(delete_account_req_st.data, "%s", password);
 
     int socket_fd = connect_to_server();
@@ -560,7 +257,7 @@ int send_delete_account_req()
     int sent_msg_size;
     if ((sent_msg_size = send(socket_fd, (request) &delete_account_req_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("send : could not send client Delete Account request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("send : could not send client Delete Account request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -568,7 +265,7 @@ int send_delete_account_req()
     st_request delete_account_response_st;
     if ((recvd_msg_size = recv(socket_fd, (request) &delete_account_response_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("recv : could not recv client Delete Account request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("recv : could not recv client Delete Account request : %s\n"), strerror(errno));
         return 1;
     }
 
@@ -580,8 +277,8 @@ int send_delete_account_req()
     else
     {
         // Delete Account failed
-        printf(REDHB("Delete Account failed!\n"));
-        printf(REDHB("Reason: %s"), delete_account_response_st.data);
+        printf(RED("Delete Account failed!\n"));
+        printf(RED("Reason: %s"), delete_account_response_st.data);
         close(socket_fd);
         return 1;
     }
@@ -637,7 +334,7 @@ char* get_my_ip()
 
         // Check for errors
         if (res != CURLE_OK) {
-            fprintf(stderr, REDHB("curl_easy_perform() failed: %s\n"), curl_easy_strerror(res));
+            fprintf(stderr, RED("curl_easy_perform() failed: %s\n"), curl_easy_strerror(res));
             return NULL;
         } else {
             // Got the ip address
@@ -646,7 +343,7 @@ char* get_my_ip()
         // Clean up
         curl_easy_cleanup(curl);
     } else {
-        fprintf(stderr, REDHB("Failed to initialize curl\n"));
+        fprintf(stderr, RED("Failed to initialize curl\n"));
         return NULL;
     }
 
@@ -672,7 +369,7 @@ void ask_to_save_credentials()
         FILE* fp = fopen("credentials.txt", "w");
         if (fp == NULL)
         {
-            fprintf(stderr, REDHB("fopen : could not open the credentials file : %s\n"), strerror(errno));
+            fprintf(stderr, RED("fopen : could not open the credentials file : %s\n"), strerror(errno));
             exit(EXIT_FAILURE);
         }
         else
@@ -694,10 +391,9 @@ void ask_to_save_credentials()
 void handleCtrlC(int signum)
 {
     st_request signout_req_st;
+    memset(&signout_req_st, 0, sizeof(st_request));
     signout_req_st.request_type = SIGNOUT;
     signout_req_st.recv_port_no = client_receiving_port_n;
-    memset(signout_req_st.ip, 0, sizeof(signout_req_st.ip));
-    memset(signout_req_st.username, 0, sizeof(signout_req_st.username));
     strcpy(signout_req_st.ip, my_ip);
     strcpy(signout_req_st.username, username);
 
@@ -706,14 +402,14 @@ void handleCtrlC(int signum)
     int sent_msg_size;
     if ((sent_msg_size = send(socket_fd, (request) &signout_req_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("send : could not send client Sign Out request : %s\n"), strerror(errno));
+        fprintf(stderr, RED("send : could not send client Sign Out request : %s\n"), strerror(errno));
     }
 
     int recvd_msg_size;
     st_request signout_response_st;
     if ((recvd_msg_size = recv(socket_fd, (request) &signout_response_st, sizeof(st_request), 0)) < 0)
     {
-        fprintf(stderr, REDHB("recv : could not recv client Sign Out request ack : %s\n"), strerror(errno));
+        fprintf(stderr, RED("recv : could not recv client Sign Out request ack : %s\n"), strerror(errno));
     }
 
     // Closing the socket as the communication is done
@@ -732,7 +428,7 @@ void* receive_client_data(void* args)
     if (client_sock_fd < 0)
     {
         // Some error occured while creating socket
-        fprintf(stderr, REDB("socket : could not start server socket : %s\n"), strerror(errno));
+        fprintf(stderr, RED("socket : could not start server socket : %s\n"), strerror(errno));
         exit(EXIT_FAILURE);
     }
 
@@ -743,18 +439,18 @@ void* receive_client_data(void* args)
     // Binding to the port
     if (bind(client_sock_fd, (struct sockaddr *) &client_address, sizeof(client_address)) == -1)
     {
-        fprintf(stderr, REDB("bind : could not bind server socket : %s\n"), strerror(errno));
+        fprintf(stderr, RED("bind : could not bind server socket : %s\n"), strerror(errno));
         exit(EXIT_FAILURE);
     }
 
     // Listening for incoming requests for communication
     if (listen(client_sock_fd, MAX_PENDING) == -1)
     {
-        fprintf(stderr, REDB("listen : could not listen on server socket : %s\n"), strerror(errno));
+        fprintf(stderr, RED("listen : could not listen on server socket : %s\n"), strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    printf(BHGREEN("\n==================== Started listening to incoming data ====================\n\n"));
+    printf(GREEN("\n==================== Started listening to incoming data ====================\n\n"));
 
     while (1)
     {
@@ -766,20 +462,18 @@ void* receive_client_data(void* args)
         
         if (sock_fd == -1)
         {
-            fprintf(stderr, REDB("accept : could not accept connection on nfs socket : %s\n"), strerror(errno));
+            fprintf(stderr, RED("accept : could not accept connection on nfs socket : %s\n"), strerror(errno));
             exit(EXIT_FAILURE);
         }
 
         // Receiving the data
         st_request recvd_data;
-        memset(recvd_data.data, 0, MAX_DATA_LEN);
-        memset(recvd_data.send_from_username, 0, 1024);
-        memset(recvd_data.send_to_username, 0, 1024);
+        memset(&recvd_data, 0, sizeof(st_request));
 
         int recvd_msg_size;
         if ((recvd_msg_size = recv(sock_fd, &recvd_data, sizeof(st_request), 0)) <= 0)
         {
-            fprintf(stderr, REDB("recv  : %s\n"), strerror(errno));
+            fprintf(stderr, RED("recv  : %s\n"), strerror(errno));
             exit(EXIT_FAILURE);
         }
 
@@ -805,8 +499,9 @@ void* receive_client_data(void* args)
             FILE *received_image = fopen(img_file_name, "wb");
             if (!received_image)
             {
-                fprintf(stderr, REDHB("Error opening file to save received image"));
-                press_enter_to_contiue();
+                fprintf(stderr, RED("Error opening file to save received image"));
+                // press_enter_to_contiue();
+                sleep(2);
                 print_menu();
             }
 
@@ -816,11 +511,12 @@ void* receive_client_data(void* args)
             while(1)
             {
                 memset(recvd_data.data, 0, MAX_DATA_LEN);
+
                 // Receiving the request
                 int msg_size;
                 if ((msg_size = recv(sock_fd, &recvd_data, sizeof(st_request), 0)) <= 0)
                 {
-                    fprintf(stderr, REDB("recv  : %s\n"), strerror(errno));
+                    fprintf(stderr, RED("recv  : %s\n"), strerror(errno));
                     exit(EXIT_FAILURE);
                 }
 
@@ -830,8 +526,8 @@ void* receive_client_data(void* args)
                 }
                 else if (recvd_data.request_type == FAIL)
                 {
-                    printf(REDHB("Failed to receive image!\n"));
-                    press_enter_to_contiue();
+                    printf(RED("Failed to receive image!\n"));
+                    sleep(2);
                     print_menu();
                     break;
                 }
@@ -845,7 +541,7 @@ void* receive_client_data(void* args)
             fclose(received_image);
 
             printf(GREEN("Image received successfully!\n"));
-            press_enter_to_contiue();
+            sleep(2);
             print_menu();
         }
 
@@ -854,7 +550,7 @@ void* receive_client_data(void* args)
 
     if (close(client_sock_fd) < 0)
     {
-        fprintf(stderr, REDB("close : failed to close the nfs socket!\n"));
+        fprintf(stderr, RED("close : failed to close the nfs socket!\n"));
         exit(EXIT_FAILURE);
     }
     return NULL;
@@ -871,6 +567,338 @@ void print_menu()
     printf(CYAN("4. Signout\n"));
     printf(CYAN("5. Delete Account\n"));
     printf(CYAN("6. Exit\n"));
+
+    printf(YELLOW("\nEnter your choice: "));
+    fflush(stdout);
+
+    return;
+}
+
+// Checks if the user you want to send data to is online or not
+int check_if_user_is_online(const int socket_fd, const int data_type, const char* to_username)
+{
+    st_request req_st;
+    memset(&req_st, 0, sizeof(st_request));
+    req_st.request_type = data_type;
+
+    strcpy(req_st.send_from_username, username);
+    strcpy(req_st.send_to_username, to_username);
+
+    // Sending the Send Image request
+    int sent_msg_size;
+    if ((sent_msg_size = send(socket_fd, (request) &req_st, sizeof(st_request), 0)) < 0)
+    {
+        fprintf(stderr, RED("send : could not send client Send Image request : %s\n"), strerror(errno));
+        press_enter_to_contiue();
+        return -1;
+    }
+
+    // Receiving the response
+    int recvd_msg_size;
+    st_request response_st;
+    if ((recvd_msg_size = recv(socket_fd, (request) &response_st, sizeof(st_request), 0)) < 0)
+    {
+        fprintf(stderr, RED("recv : could not recv client Send Image request : %s\n"), strerror(errno));
+        press_enter_to_contiue();
+        return -1;
+    }
+
+    return response_st.request_type;
+}
+
+// Asks the user if he/she wants to signin to an existing account or wants to create a new account
+void ask_signin_or_signup()
+{
+    // Clear the terminal
+    system(clear);
+
+    // Asking user if he wants to signin or signup
+    printf(PINK("What do you want to do?\n"));
+    printf(PINK("1. Sign In\n"));
+    printf(PINK("2. Sign Up\n"));
+
+    printf(YELLOW("\nEnter your choice: "));
+    int choice;
+    scanf("%d", &choice);
+
+    if (choice == 1)
+    {
+        // Signin
+        memset(username, 0, sizeof(username));
+        memset(password, 0, sizeof(password));
+
+        // Asking for username and password
+        printf(BLUE("\nEnter the username(email): "));
+        scanf("%s", username);
+        printf(BLUE("Enter the password: "));
+        scanf("%s", password);
+
+        // Sends sign in request to the server and then checks if the signin suceeded or not
+        int result = send_signin_req(); // Send the signin request to the server and then check if the signin suceeded or not
+        press_enter_to_contiue();
+
+        if (result == 0)
+        {
+            // sign in is successful
+            logged_in = 1;
+
+            // Now if the credentials are not saved then asking the user if he wants to save the credentials or not
+            if (credentials_saved == 0)
+                ask_to_save_credentials();
+        }
+    }
+    else if (choice == 2)
+    {
+        // Signup
+        memset(username, 0, sizeof(username));
+        memset(password, 0, sizeof(password));
+        printf(BLUE("\nEnter the username(email): "));
+        scanf("%s", username);
+        printf(BLUE("Enter the password: "));
+        scanf("%s", password);
+
+        int result = send_signup_req(); // Register the new username and password and then check if the registration suceeded or not
+        press_enter_to_contiue();
+
+        if (result == 0)
+        {
+            // sign up is successful
+            logged_in = 1;
+
+            // Asking if the user wants to save it's credentials
+            ask_to_save_credentials();
+        }
+    }
+    else
+    {
+        char temp[100];
+        printf(RED("Invalid choice\n"));
+        press_enter_to_contiue();
+    }
+
+    return;
+}
+
+// Prints the menu and then asks for the input
+void menu()
+{
+    print_menu();
+
+    int choice;
+    scanf("%d", &choice);
+    printf("\n");
+
+    if (choice == 1)
+    {
+        // Send message
+        printf("Enter the username of the person you want to send the message to: ");
+        char to_username[1024] = {0};
+        scanf("%s", to_username);
+
+        int socket_fd = connect_to_server();
+
+        int reply = check_if_user_is_online(socket_fd, SEND_MSG, to_username);
+
+        if (reply == ACK)
+        {
+            // User is online, we can send message
+            printf("Enter the message (max 1024 characters): ");
+            char message[1024] = {0};
+            scanf("%s", message);
+
+            printf(GREEN("Sending message...\n"));
+
+            st_request message_st;
+            memset(&message_st, 0, sizeof(st_request));
+            message_st.request_type = MSG_DATA;
+
+            strcpy(message_st.send_from_username, username);
+            strcpy(message_st.send_to_username, to_username);
+            strcpy(message_st.data, message);
+
+            int sent_msg_size;
+            if ((sent_msg_size = send(socket_fd, (request) &message_st, sizeof(st_request), 0)) < 0)
+            {
+                fprintf(stderr, RED("send : could not send client Send Message request : %s\n"), strerror(errno));
+                close(socket_fd);
+                press_enter_to_contiue();
+                return;
+            }
+
+            printf(GREEN("Message sent successfully!\n"));
+        }
+        else
+        {
+            // Send message request failed
+            printf(RED("Send message request failed!\n"));
+            close(socket_fd);
+            press_enter_to_contiue();
+            return;
+        }
+    }
+    else if (choice == 2)
+    {
+        // Send file
+    }
+    else if (choice == 3)
+    {
+        // Send image
+        printf("Enter the username of the person you want to send the image to: ");
+        char to_username[1024] = {0};
+        scanf("%s", to_username);
+
+        int socket_fd = connect_to_server();
+
+        int reply = check_if_user_is_online(socket_fd, SEND_IMG, to_username);
+
+        if (reply == ACK)
+        {
+            // User is online
+            printf(GREEN("User to be sent image to found!\n"));
+
+            // Image can be sent
+            printf("Enter the path of the image: ");
+            char image_path[1024] = {0};
+            scanf("%s", image_path);
+
+            printf(GREEN("Sending image...\n"));
+
+            FILE* image = fopen(image_path, "rb");
+            if (image == NULL)
+            {
+                fprintf(stderr, RED("fopen : could not open the image file : %s\n"), strerror(errno));
+                st_request failed_st;
+                failed_st.request_type = FAIL;
+                send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0);
+                close(socket_fd);
+                press_enter_to_contiue();
+                return;
+            }
+
+            // Send the image data
+            st_request image_data;
+            memset(&image_data, 0, sizeof(st_request));
+            image_data.request_type = IMG_DATA;
+
+            strcpy(image_data.send_from_username, username);
+            strcpy(image_data.send_to_username, to_username);
+
+            char** tkns = tokenize(image_path, '/');
+            char* img_name_with_extension = NULL;
+
+            int i = 0;
+            while (tkns[i] != NULL)
+            {
+                img_name_with_extension = tkns[i];
+                i++;
+            }
+
+            char** tkns2 = tokenize(img_name_with_extension, '.');
+            char* name = tkns2[0];
+            char* ext = tkns2[1];
+
+            sprintf(image_data.data, "%s_received|%s", name, ext); // <Image name>|<Image extension>
+
+            free_tokens(tkns2);
+            free_tokens(tkns);
+
+            send(socket_fd, (request) &image_data, sizeof(st_request), 0);
+            printf("Sent image name packet\n");
+
+            while(1)
+            {
+                memset(image_data.data, 0, MAX_DATA_LEN);
+                int bytes_read = fread(image_data.data, 1, MAX_DATA_LEN, image);
+                if (bytes_read <= 0)
+                {
+                    break;
+                }
+                send(socket_fd, (request) &image_data, sizeof(st_request), 0);
+                printf("Sent image packet\n");
+            }
+
+            // Send the end of image data
+            st_request image_data_end;
+            image_data_end.request_type = IMG_DATA_END;
+
+            send(socket_fd, (request) &image_data_end, sizeof(st_request), 0);
+
+            fclose(image);
+
+            printf(GREEN("Image sent successfully!\n"));
+            press_enter_to_contiue();
+            return;
+        }
+        else
+        {
+            // Send Image request failed
+            printf(RED("Send Image request failed!\n"));
+            close(socket_fd);
+            press_enter_to_contiue();
+            return;
+        }
+    }
+    else if (choice == 4)
+    {
+        // signout
+        printf(ORANGE("Signing out...\n"));
+        int result = send_signout_req();
+        press_enter_to_contiue();
+        if (result == 0)
+        {
+            logged_in = 0;
+        }
+        return;
+    }
+    else if (choice == 5)
+    {
+        // Delete account
+        printf(RED("Are you sure you want to delete your account? (y/n): "));
+        char temp[2] = {0};
+        scanf("%s", temp);
+        if (strcmp(temp, "y") == 0)
+        {
+            printf("Enter your password to confirm: ");
+            char entered_password[1024];
+            scanf("%s", entered_password);
+            if (strcmp(entered_password, password) != 0)
+            {
+                printf(RED("Incorrect password\n"));
+                press_enter_to_contiue();
+                return;
+            }
+
+            int result = send_delete_account_req();
+            if (result == 0)
+            {
+                // Account deleted succesfully
+                remove("credentials.txt");
+                logged_in = 0;
+                credentials_saved = 0;
+            }
+            press_enter_to_contiue();
+            return;
+        }
+        else
+            return;
+    }
+    else if (choice == 6)
+    {
+        // exit
+        printf(ORANGE("Exiting...\n"));
+        int result;
+        while ((result = send_signout_req()) != 0)
+        {
+            ;   // Continue
+        }
+        printf(GREEN("Exitted!\n"));
+        exit(EXIT_SUCCESS);
+    }
+    else
+    {
+        printf(RED("Invalid choice\n"));
+        press_enter_to_contiue();
+    }
 
     return;
 }

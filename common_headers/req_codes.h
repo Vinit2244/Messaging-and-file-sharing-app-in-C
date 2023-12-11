@@ -20,6 +20,8 @@
 #define INVALID_USER 16
 #define INTER_REQ_RECV 17
 #define INTER_REQ_SEND 18
+#define SEND_MSG 19
+#define MSG_DATA 20
 
 // ===================== Status types =====================
 #define OFFLINE 0

@@ -7,7 +7,7 @@
 #define MAX_CLIENTS 500
 #define BUFFER_SIZE 1024
 
-#define SERVER_PORT_N 6754
+#define SERVER_PORT_N 9765
 #define SERVER_IP "0.0.0.0"
 
 #endif
