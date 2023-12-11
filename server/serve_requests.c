@@ -372,7 +372,6 @@ void* serve_request(void* args)
 
                     send_ack(ACK, sock_fd, NULL);
                     printf(GREEN("Sent online ack\n"));
-
                     insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, ACK, recvd_request.username, recvd_request.ip);
 
                     int client2_sock_fd = connect_to_client(clients_list[i].client_ip, clients_list[i].client_recv_port_n);
@@ -381,7 +380,6 @@ void* serve_request(void* args)
                         fprintf(stderr, REDB("connnect_to_client : could not connect to client : %s\n"), strerror(errno));
                         exit(EXIT_FAILURE);
                     }
-
                     printf(GREEN("Connected to client2\n"));
 
                     while(1)
@@ -422,6 +420,7 @@ void* serve_request(void* args)
                         if (intermediate_st.request_type == FAIL)
                         {
                             printf(RED("Client failed to receive image\n"));
+                            send_ack(FAIL, client2_sock_fd, NULL);
                             break;
                         }                
                     }

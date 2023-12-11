@@ -33,12 +33,15 @@ int main(int argc, char* argv[])
     int choice;
 
     // Getting the ip info
-    my_ip = get_my_ip();
-    if (my_ip == NULL)
-    {
-        fprintf(stderr, REDHB("Could not get the ip address of the client\n"));
-        exit(EXIT_FAILURE);
-    }
+    my_ip = "0.0.0.0";
+
+    // This code was commented by me as the ipinfo.io api was not working at that time
+    // my_ip = get_my_ip();
+    // if (my_ip == NULL)
+    // {
+    //     fprintf(stderr, REDHB("Could not get the ip address of the client\n"));
+    //     exit(EXIT_FAILURE);
+    // }
 
     printf(GREEN("Your ip is : %s\n"), my_ip);
     press_enter_to_contiue();
@@ -144,15 +147,7 @@ ASK_SIGNIN_OR_SIGNUP:
     }
 SIGNIN_SUCCESSFUL:
     // Signin successful
-
-    system(clear);
-    printf(ORANGE("What do you want to do?\n"));
-    printf(CYAN("1. Send Message\n"));
-    printf(CYAN("2. Send File\n"));
-    printf(CYAN("3. Send Image\n"));
-    printf(CYAN("4. Signout\n"));
-    printf(CYAN("5. Delete Account\n"));
-    printf(CYAN("6. Exit\n"));
+    print_menu();
 
     int choice2;
     printf(YELLOW("\nEnter your choice: "));
@@ -248,20 +243,39 @@ SIGNIN_SUCCESSFUL:
             strcpy(image_data.send_from_username, username);
             strcpy(image_data.send_to_username, to_username);
 
-            int bytesRead = fread(image_data.data, 1, MAX_DATA_LEN, image);
-            if (bytesRead <= 0)
+            char** tkns = tokenize(image_path, '/');
+            char* img_name_with_extension = NULL;
+
+            int i = 0;
+            while (tkns[i] != NULL)
             {
-                fprintf(stderr, REDHB("fread : could not read the image file : %s\n"), strerror(errno));
-                st_request failed_st;
-                failed_st.request_type = FAIL;
-                send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0);
-                close(socket_fd);
-                press_enter_to_contiue();
-                goto SIGNIN_SUCCESSFUL;
+                img_name_with_extension = tkns[i];
+                i++;
             }
 
+            char** tkns2 = tokenize(img_name_with_extension, '.');
+            char* name = tkns2[0];
+            char* ext = tkns2[1];
+
+            sprintf(image_data.data, "%s_received|%s", name, ext); // <Image name>|<Image extension>
+
+            free_tokens(tkns2);
+            free_tokens(tkns);
+
+            // int bytesRead = fread(image_data.data, 1, MAX_DATA_LEN, image);
+            // if (bytesRead <= 0)
+            // {
+            //     fprintf(stderr, REDHB("fread : could not read the image file : %s\n"), strerror(errno));
+            //     st_request failed_st;
+            //     failed_st.request_type = FAIL;
+            //     send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0);
+            //     close(socket_fd);
+            //     press_enter_to_contiue();
+            //     goto SIGNIN_SUCCESSFUL;
+            // }
+
             send(socket_fd, (request) &image_data, sizeof(st_request), 0);
-            printf("Sent image packet\n");
+            printf("Sent image name packet\n");
 
             while(1)
             {
@@ -284,6 +298,8 @@ SIGNIN_SUCCESSFUL:
             fclose(image);
 
             printf(GREEN("Image sent successfully!\n"));
+            press_enter_to_contiue();
+            goto SIGNIN_SUCCESSFUL;
         }
         else
         {
@@ -738,7 +754,7 @@ void* receive_client_data(void* args)
         exit(EXIT_FAILURE);
     }
 
-    printf(BHGREEN("==================== Started listening to incoming data ====================\n\n"));
+    printf(BHGREEN("\n==================== Started listening to incoming data ====================\n\n"));
 
     while (1)
     {
@@ -770,18 +786,31 @@ void* receive_client_data(void* args)
         // If the data sent is image data
         if (recvd_data.request_type == IMG_DATA)
         {
+            char** tkns = tokenize(recvd_data.data, '|');
+            char* img_name = tkns[0];
+            char* img_ext = tkns[1];
             // Clear the terminal and print that we are receiving the image
             system(clear);
-            printf("Receiving image from %s ...\n", recvd_data.send_from_username);
+            printf("Receiving image %s from %s ...\n", img_name, recvd_data.send_from_username);
 
-            FILE *received_image = fopen("received_image.jpg", "wb");
+            // Create a file to save the image
+            char img_file_name[1024] = {0};
+
+            strcpy(img_file_name, img_name);
+            strcat(img_file_name, ".");
+            strcat(img_file_name, img_ext);
+
+            free_tokens(tkns);
+
+            FILE *received_image = fopen(img_file_name, "wb");
             if (!received_image)
             {
                 fprintf(stderr, REDHB("Error opening file to save received image"));
-                exit(EXIT_FAILURE);
+                press_enter_to_contiue();
+                print_menu();
             }
 
-            fwrite(recvd_data.data, 1, MAX_DATA_LEN, received_image);
+            // fwrite(recvd_data.data, 1, MAX_DATA_LEN, received_image);
 
             // Keep receving the image data until we get the end of image data
             while(1)
@@ -799,6 +828,13 @@ void* receive_client_data(void* args)
                 {
                     fwrite(recvd_data.data, 1, MAX_DATA_LEN, received_image);
                 }
+                else if (recvd_data.request_type == FAIL)
+                {
+                    printf(REDHB("Failed to receive image!\n"));
+                    press_enter_to_contiue();
+                    print_menu();
+                    break;
+                }
                 else if (recvd_data.request_type == IMG_DATA_END)
                 {
                     break;
@@ -809,6 +845,8 @@ void* receive_client_data(void* args)
             fclose(received_image);
 
             printf(GREEN("Image received successfully!\n"));
+            press_enter_to_contiue();
+            print_menu();
         }
 
         close(sock_fd);
@@ -820,4 +858,19 @@ void* receive_client_data(void* args)
         exit(EXIT_FAILURE);
     }
     return NULL;
+}
+
+// Function to print the menu
+void print_menu()
+{
+    system(clear);
+    printf(ORANGE("What do you want to do?\n"));
+    printf(CYAN("1. Send Message\n"));
+    printf(CYAN("2. Send File\n"));
+    printf(CYAN("3. Send Image\n"));
+    printf(CYAN("4. Signout\n"));
+    printf(CYAN("5. Delete Account\n"));
+    printf(CYAN("6. Exit\n"));
+
+    return;
 }

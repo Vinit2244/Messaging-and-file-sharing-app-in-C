@@ -15,6 +15,7 @@ void ask_to_save_credentials();
 int send_signout_req();
 int send_delete_account_req();
 void handleCtrlC(int signum);
+void print_menu();
 
 void* receive_client_data(void* args);
 
