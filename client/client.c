@@ -544,6 +544,26 @@ void* receive_client_data(void* args)
             sleep(2);
             print_menu();
         }
+        else if (recvd_data.request_type == MSG_DATA)
+        {
+            // Clear the terminal and print that we are receiving the message
+            system(clear);
+            printf("Receiving message from %s ...\n", recvd_data.send_from_username);
+
+            printf(GREEN("Message: %s\n"), recvd_data.data);
+            sleep(2);
+            print_menu();
+        }
+        else
+        {
+            // Clear the terminal and print that we are receiving the message
+            system(clear);
+
+            printf(RED("Unknown request received from %s\n"), recvd_data.send_from_username);
+            sleep(2);
+            print_menu();
+        }
+
 
         close(sock_fd);
     }
@@ -704,7 +724,7 @@ void menu()
             // User is online, we can send message
             printf("Enter the message (max 1024 characters): ");
             char message[1024] = {0};
-            scanf("%s", message);
+            scanf(" %[^\n]", message);
 
             printf(GREEN("Sending message...\n"));
 
@@ -726,6 +746,8 @@ void menu()
             }
 
             printf(GREEN("Message sent successfully!\n"));
+            press_enter_to_contiue();
+            return;
         }
         else
         {
