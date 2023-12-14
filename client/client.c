@@ -478,68 +478,17 @@ void* receive_client_data(void* args)
         }
 
         // If the data sent is image data
-        if (recvd_data.request_type == IMG_DATA)
+        if (recvd_data.request_type == FILE_DATA)
         {
-            char** tkns = tokenize(recvd_data.data, '|');
-            char* img_name = tkns[0];
-            char* img_ext = tkns[1];
-            // Clear the terminal and print that we are receiving the image
-            system(clear);
-            printf("Receiving image %s from %s ...\n", img_name, recvd_data.send_from_username);
+            receive_data(sock_fd, recvd_data, FILE_DATA, FILE_DATA_END);
 
-            // Create a file to save the image
-            char img_file_name[1024] = {0};
-
-            strcpy(img_file_name, img_name);
-            strcat(img_file_name, ".");
-            strcat(img_file_name, img_ext);
-
-            free_tokens(tkns);
-
-            FILE *received_image = fopen(img_file_name, "wb");
-            if (!received_image)
-            {
-                fprintf(stderr, RED("Error opening file to save received image"));
-                // press_enter_to_contiue();
-                sleep(2);
-                print_menu();
-            }
-
-            // fwrite(recvd_data.data, 1, MAX_DATA_LEN, received_image);
-
-            // Keep receving the image data until we get the end of image data
-            while(1)
-            {
-                memset(recvd_data.data, 0, MAX_DATA_LEN);
-
-                // Receiving the request
-                int msg_size;
-                if ((msg_size = recv(sock_fd, &recvd_data, sizeof(st_request), 0)) <= 0)
-                {
-                    fprintf(stderr, RED("recv  : %s\n"), strerror(errno));
-                    exit(EXIT_FAILURE);
-                }
-
-                if (recvd_data.request_type == IMG_DATA)
-                {
-                    fwrite(recvd_data.data, 1, MAX_DATA_LEN, received_image);
-                }
-                else if (recvd_data.request_type == FAIL)
-                {
-                    printf(RED("Failed to receive image!\n"));
-                    sleep(2);
-                    print_menu();
-                    break;
-                }
-                else if (recvd_data.request_type == IMG_DATA_END)
-                {
-                    break;
-                }
-            }
-
-            // Close the file and socket
-            fclose(received_image);
-
+            printf(GREEN("File received successfully!\n"));
+            sleep(2);
+            print_menu();
+        }
+        else if (recvd_data.request_type == IMG_DATA)
+        {
+            receive_data(sock_fd, recvd_data, IMG_DATA, IMG_DATA_END);
             printf(GREEN("Image received successfully!\n"));
             sleep(2);
             print_menu();
@@ -554,6 +503,16 @@ void* receive_client_data(void* args)
             sleep(2);
             print_menu();
         }
+        else if (recvd_data.request_type == AUDIO_DATA)
+        {
+            receive_data(sock_fd, recvd_data, AUDIO_DATA, AUDIO_DATA_END);
+
+            play_audio("recorded_audio_received.wav");
+
+            remove("recorded_audio_received.wav");
+            sleep(1);
+            print_menu();
+        }
         else
         {
             // Clear the terminal and print that we are receiving the message
@@ -564,13 +523,16 @@ void* receive_client_data(void* args)
             print_menu();
         }
 
-
-        close(sock_fd);
+        if (close(sock_fd) < 0)
+        {
+            fprintf(stderr, RED("close : failed to close the socket!\n"));
+            exit(EXIT_FAILURE);
+        }
     }
 
     if (close(client_sock_fd) < 0)
     {
-        fprintf(stderr, RED("close : failed to close the nfs socket!\n"));
+        fprintf(stderr, RED("close : failed to close the client socket!\n"));
         exit(EXIT_FAILURE);
     }
     return NULL;
@@ -586,7 +548,8 @@ void print_menu()
     printf(CYAN("3. Send Image\n"));
     printf(CYAN("4. Signout\n"));
     printf(CYAN("5. Delete Account\n"));
-    printf(CYAN("6. Exit\n"));
+    printf(CYAN("6. Send voice message\n"));
+    printf(CYAN("7. Exit\n"));
 
     printf(YELLOW("\nEnter your choice: "));
     fflush(stdout);
@@ -717,7 +680,7 @@ void menu()
 
         int socket_fd = connect_to_server();
 
-        int reply = check_if_user_is_online(socket_fd, SEND_MSG, to_username);
+        int reply = check_if_user_is_online(socket_fd, FIND_USER, to_username);
 
         if (reply == ACK)
         {
@@ -761,6 +724,32 @@ void menu()
     else if (choice == 2)
     {
         // Send file
+        printf("Enter the username of the person you want to send the file to: ");
+        char to_username[1024] = {0};
+        scanf("%s", to_username);
+
+        int socket_fd = connect_to_server();
+
+        int reply = check_if_user_is_online(socket_fd, FIND_USER, to_username);
+
+        if (reply == ACK)
+        {
+            // User is online
+            printf(GREEN("User to be sent file to found!\n"));
+
+            // File can be sent
+            printf("Enter the path of the file: ");
+            char file_path[1024] = {0};
+            scanf("%s", file_path);
+
+            printf(GREEN("Sending file...\n"));
+
+            send_file(file_path, socket_fd, to_username, FILE_DATA, FILE_DATA_END);
+
+            printf(GREEN("File sent successfully!\n"));
+            press_enter_to_contiue();
+            return;
+        }
     }
     else if (choice == 3)
     {
@@ -771,7 +760,7 @@ void menu()
 
         int socket_fd = connect_to_server();
 
-        int reply = check_if_user_is_online(socket_fd, SEND_IMG, to_username);
+        int reply = check_if_user_is_online(socket_fd, FIND_USER, to_username);
 
         if (reply == ACK)
         {
@@ -785,67 +774,7 @@ void menu()
 
             printf(GREEN("Sending image...\n"));
 
-            FILE* image = fopen(image_path, "rb");
-            if (image == NULL)
-            {
-                fprintf(stderr, RED("fopen : could not open the image file : %s\n"), strerror(errno));
-                st_request failed_st;
-                failed_st.request_type = FAIL;
-                send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0);
-                close(socket_fd);
-                press_enter_to_contiue();
-                return;
-            }
-
-            // Send the image data
-            st_request image_data;
-            memset(&image_data, 0, sizeof(st_request));
-            image_data.request_type = IMG_DATA;
-
-            strcpy(image_data.send_from_username, username);
-            strcpy(image_data.send_to_username, to_username);
-
-            char** tkns = tokenize(image_path, '/');
-            char* img_name_with_extension = NULL;
-
-            int i = 0;
-            while (tkns[i] != NULL)
-            {
-                img_name_with_extension = tkns[i];
-                i++;
-            }
-
-            char** tkns2 = tokenize(img_name_with_extension, '.');
-            char* name = tkns2[0];
-            char* ext = tkns2[1];
-
-            sprintf(image_data.data, "%s_received|%s", name, ext); // <Image name>|<Image extension>
-
-            free_tokens(tkns2);
-            free_tokens(tkns);
-
-            send(socket_fd, (request) &image_data, sizeof(st_request), 0);
-            printf("Sent image name packet\n");
-
-            while(1)
-            {
-                memset(image_data.data, 0, MAX_DATA_LEN);
-                int bytes_read = fread(image_data.data, 1, MAX_DATA_LEN, image);
-                if (bytes_read <= 0)
-                {
-                    break;
-                }
-                send(socket_fd, (request) &image_data, sizeof(st_request), 0);
-                printf("Sent image packet\n");
-            }
-
-            // Send the end of image data
-            st_request image_data_end;
-            image_data_end.request_type = IMG_DATA_END;
-
-            send(socket_fd, (request) &image_data_end, sizeof(st_request), 0);
-
-            fclose(image);
+            send_file(image_path, socket_fd, to_username, IMG_DATA, IMG_DATA_END);
 
             printf(GREEN("Image sent successfully!\n"));
             press_enter_to_contiue();
@@ -906,6 +835,52 @@ void menu()
     }
     else if (choice == 6)
     {
+        // Send voice message
+        printf("Enter the username of the person you want to send the voice message to: ");
+        char to_username[1024] = {0};
+        scanf("%s", to_username);
+
+        int socket_fd = connect_to_server();
+
+        int reply = check_if_user_is_online(socket_fd, FIND_USER, to_username);
+
+        if (reply == ACK)
+        {
+            // User is online
+            printf(GREEN("User to be sent voice message to found!\n"));
+
+            printf("Enter the duration of the voice message (in seconds): ");
+            int duration;
+            scanf("%d", &duration);
+
+            // Specify the filename for recording
+            char *filename = "recorded_audio.wav";
+
+            // Use the system call to execute the rec command
+            char command[100];
+            sprintf(command, "rec -r 44100 -b 16 -c 1 -e signed-integer -t wav %s trim 0 %d", filename, duration);
+
+            int result = system(command);
+
+            if (result == 0) {
+                printf(GREEN("Audio recording successful. File: %s\n"), filename);
+            } else {
+                fprintf(stderr, RED("Error recording audio\n"));
+                return;
+            }
+
+            printf(GREEN("Sending audio file...\n"));
+
+            send_file(filename, socket_fd, to_username, AUDIO_DATA, AUDIO_DATA_END);
+
+            printf(GREEN("Audio file sent successfully!\n"));
+            remove(filename);
+            press_enter_to_contiue();
+            return;
+        }
+    }
+    else if (choice == 7)
+    {
         // exit
         printf(ORANGE("Exiting...\n"));
         int result;
@@ -923,4 +898,175 @@ void menu()
     }
 
     return;
+}
+
+// Function to send any type of file
+void send_file(char* file_path, int socket_fd, char* to_username, int flag, int end_flag)
+{
+    int sent_msg_size;
+    FILE* File = fopen(file_path, "rb");
+    if (File == NULL)
+    {
+        fprintf(stderr, RED("fopen : could not open the file : %s\n"), strerror(errno));
+        st_request failed_st;
+        failed_st.request_type = FAIL;
+        if ((sent_msg_size = send(socket_fd, (st_request*) &failed_st, sizeof(st_request), 0)) < 0)
+        {
+            fprintf(stderr, RED("send : could not send client Send File request : %s\n"), strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        close(socket_fd);
+        press_enter_to_contiue();
+        return;
+    }
+
+    // Send the File data
+    st_request File_data;
+    memset(&File_data, 0, sizeof(st_request));
+    File_data.request_type = flag;
+
+    strcpy(File_data.send_from_username, username);
+    strcpy(File_data.send_to_username, to_username);
+
+    char** tkns = tokenize(file_path, '/');
+    char* file_name_with_extension = NULL;
+
+    int i = 0;
+    while (tkns[i] != NULL)
+    {
+        file_name_with_extension = tkns[i];
+        i++;
+    }
+
+    char** tkns2 = tokenize(file_name_with_extension, '.');
+    char* name = tkns2[0];
+    char* ext = tkns2[1];
+
+    sprintf(File_data.data, "%s_received|%s", name, ext); // <File name>|<File extension>
+
+    free_tokens(tkns2);
+    free_tokens(tkns);
+
+    if ((sent_msg_size = send(socket_fd, (request) &File_data, sizeof(st_request), 0)) < 0)
+    {
+        fprintf(stderr, RED("send : could not send client Send File request : %s\n"), strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    
+    printf("Sent File name packet\n");
+
+    while(1)
+    {
+        memset(File_data.data, 0, MAX_DATA_LEN);
+        int bytes_read = fread(File_data.data, 1, MAX_DATA_LEN, File);
+        if (bytes_read <= 0)
+        {
+            break;
+        }
+
+        if ((sent_msg_size = send(socket_fd, (request) &File_data, sizeof(st_request), 0)) < 0)
+        {
+            fprintf(stderr, RED("send : could not send client Send File request : %s\n"), strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        
+        printf("Sent File packet\n");
+    }
+
+    // Send the end of File data
+    st_request File_data_end;
+    File_data_end.request_type = end_flag;
+
+    if ((sent_msg_size = send(socket_fd, (request) &File_data_end, sizeof(st_request), 0)) < 0)
+    {
+        fprintf(stderr, RED("send : could not send client Send File request : %s\n"), strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(File);
+
+    return;
+}
+
+// Receives the file data from the server
+void receive_data(int sock_fd, st_request recvd_data, int flag, int end_flag)
+{
+    char** tkns = tokenize(recvd_data.data, '|');
+    char* file_name = tkns[0];
+    char* file_ext = tkns[1];
+
+    // Clear the terminal and print that we are receiving the image
+    system(clear);
+    printf("Receiving file %s from %s ...\n", file_name, recvd_data.send_from_username);
+
+    // Create a file to save the image
+    char file[1024] = {0};
+
+    strcpy(file, file_name);
+    strcat(file, ".");
+    strcat(file, file_ext);
+
+    free_tokens(tkns);
+
+    FILE *received_file = fopen(file, "wb");
+    if (!received_file)
+    {
+        fprintf(stderr, RED("Error opening file to save received file"));
+        sleep(2);
+        print_menu();
+    }
+
+    printf("Opened file\n");
+
+    // Keep receving the file data until we get the end of file data
+    while(1)
+    {
+        memset(recvd_data.data, 0, MAX_DATA_LEN);
+
+        // Receiving the request
+        int msg_size;
+        if ((msg_size = recv(sock_fd, &recvd_data, sizeof(st_request), 0)) <= 0)
+        {
+            fprintf(stderr, RED("recv  : %s\n"), strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        if (recvd_data.request_type == flag)
+        {
+            fwrite(recvd_data.data, 1, MAX_DATA_LEN, received_file);
+        }
+        else if (recvd_data.request_type == FAIL)
+        {
+            printf(RED("Failed to receive File!\n"));
+            sleep(2);
+            print_menu();
+            break;
+        }
+        else if (recvd_data.request_type == end_flag)
+        {
+            break;
+        }
+
+        printf(GREEN("Received File packet\n"));
+    }
+
+    // Close the file and socket
+    fclose(received_file);
+}
+
+// Plays the provided audio file
+void play_audio(const char *filename)
+{
+    char command[256];
+    sprintf(command, "afplay %s", filename);
+
+    int result = system(command);
+
+    if (result == 0)
+    {
+        printf("Audio playback successful.\n");
+    } else
+    {
+        fprintf(stderr, "Error playing audio.\n");
+    }
 }

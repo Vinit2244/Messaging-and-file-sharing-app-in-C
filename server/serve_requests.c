@@ -357,9 +357,9 @@ void* serve_request(void* args)
         send_ack(DELETE_FAILED, sock_fd, REDB("Username does not exist\n"));
         insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, DELETE_FAILED, recvd_request.username, recvd_request.ip);
     }
-    else if (recvd_request.request_type == SEND_IMG)
+    else if (recvd_request.request_type == FIND_USER)
     {
-        printf(YELLOW("Send image request received.\n"));
+        printf(YELLOW("Find user request received.\n"));
         printf("Data : %s\n\n", recvd_request.data);
         
         for (int i = 0; i < MAX_CLIENTS; i++)
@@ -369,99 +369,6 @@ void* serve_request(void* args)
                 // Invalid client
                 continue;
             }
-            if (strcmp(clients_list[i].client_username, recvd_request.send_to_username) == 0)
-            {
-                // Username found
-                printf(GREEN("Username found\n"));
-                if (clients_list[i].online == ONLINE)
-                {
-                    // Client is online
-                    printf(GREEN("Client is online\n"));
-
-                    send_ack(ACK, sock_fd, NULL);
-                    printf(GREEN("Sent online ack\n"));
-                    insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, ACK, recvd_request.username, recvd_request.ip);
-
-                    int client2_sock_fd = connect_to_client(clients_list[i].client_ip, clients_list[i].client_recv_port_n);
-                    if (client2_sock_fd < 0)
-                    {
-                        fprintf(stderr, REDB("connnect_to_client : could not connect to client : %s\n"), strerror(errno));
-                        exit(EXIT_FAILURE);
-                    }
-                    printf(GREEN("Connected to client2\n"));
-
-                    while(1)
-                    {
-                        st_request intermediate_st;
-                        memset(intermediate_st.data, 0, MAX_DATA_LEN);
-                        memset(intermediate_st.send_to_username, 0, 1024);
-                        memset(intermediate_st.send_from_username, 0, 1024);
-
-                        int recvd_msg_size;
-                        if ((recvd_msg_size = recv(sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
-                        {
-                            fprintf(stderr, REDB("recv  : %s\n"), strerror(errno));
-                            send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
-                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
-                            goto End;
-                        }
-                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_RECV, recvd_request.username, recvd_request.ip);
-
-                        int sent_msg_size;
-                        if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
-                        {
-                            fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
-                            send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
-                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
-                            goto End;
-                        }
-                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
-
-                        printf(GREEN("Sent intermediate request\n"));
-
-                        if (intermediate_st.request_type == IMG_DATA_END)
-                        {
-                            printf(GREEN("Received image data end\n"));
-                            break;
-                        }
-
-                        if (intermediate_st.request_type == FAIL)
-                        {
-                            printf(RED("Client failed to receive image\n"));
-                            break;
-                        }                
-                    }
-
-                    close(client2_sock_fd);
-                }
-                else
-                {
-                    st_request req;
-                    req.request_type = CLIENT_OFFLINE;
-                    send_ack(CLIENT_OFFLINE, sock_fd, RED("Client is offline\n"));
-                    insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, CLIENT_OFFLINE, recvd_request.username, recvd_request.ip);
-                    goto End;
-                }
-            }
-        }
-
-        // Username not found
-        send_ack(INVALID_USER, sock_fd, REDB("Username does not exist\n"));
-        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INVALID_USER, recvd_request.username, recvd_request.ip);
-    }
-    else if (recvd_request.request_type == SEND_MSG)
-    {
-        printf(YELLOW("Send message request received.\n"));
-        printf("Data : %s\n\n", recvd_request.data);
-        
-        for (int i = 0; i < MAX_CLIENTS; i++)
-        {
-            if (clients_list[i].valid == 0)
-            {
-                // Invalid client
-                continue;
-            }
-
             if (strcmp(clients_list[i].client_username, recvd_request.send_to_username) == 0)
             {
                 // Username found
@@ -498,24 +405,189 @@ void* serve_request(void* args)
                     }
                     insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_RECV, recvd_request.username, recvd_request.ip);
 
-                    int sent_msg_size;
-                    if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                    if (intermediate_st.request_type == IMG_DATA)
                     {
-                        fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
-                        send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
-                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
-                        goto End;
+                        int sent_msg_size;
+                        if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                        {
+                            fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                            send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                            goto End;
+                        }
+                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+
+                        printf(GREEN("Sent intermediate request\n"));
+
+                        while (1)
+                        {
+                            memset(intermediate_st.data, 0, MAX_DATA_LEN);
+
+                            int recvd_msg_size;
+                            if ((recvd_msg_size = recv(sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                            {
+                                fprintf(stderr, REDB("recv  : %s\n"), strerror(errno));
+                                send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                                insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                                goto End;
+                            }
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_RECV, recvd_request.username, recvd_request.ip);
+
+                            int sent_msg_size;
+                            if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                            {
+                                fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                                send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                                insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                                goto End;
+                            }
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+
+                            printf(GREEN("Sent intermediate request\n"));
+
+                            if (intermediate_st.request_type == IMG_DATA_END)
+                            {
+                                printf(GREEN("Received image data end\n"));
+                                break;
+                            }
+
+                            if (intermediate_st.request_type == FAIL)
+                            {
+                                printf(RED("Client failed to receive image\n"));
+                                break;
+                            }       
+                        }
                     }
-                    insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+                    else if (intermediate_st.request_type == FILE_DATA)
+                    {
+                        int sent_msg_size;
+                        if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                        {
+                            fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                            send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                            goto End;
+                        }
+                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
 
-                    printf(GREEN("Sent intermediate request\n"));
+                        printf(GREEN("Sent intermediate request\n"));
 
-                    if (intermediate_st.request_type == FAIL)
+                        while (1)
+                        {
+                            memset(intermediate_st.data, 0, MAX_DATA_LEN);
+
+                            int recvd_msg_size;
+                            if ((recvd_msg_size = recv(sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                            {
+                                fprintf(stderr, REDB("recv  : %s\n"), strerror(errno));
+                                send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                                insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                                goto End;
+                            }
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_RECV, recvd_request.username, recvd_request.ip);
+                            
+                            int sent_msg_size;
+                            if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                            {
+                                fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                                send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                                insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                                goto End;
+                            }
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+
+                            printf(GREEN("Sent intermediate request\n"));
+
+                            if (intermediate_st.request_type == FILE_DATA_END)
+                            {
+                                printf(GREEN("Received file data end\n"));
+                                break;
+                            }
+
+                            if (intermediate_st.request_type == FAIL)
+                            {
+                                printf(RED("Client failed to receive file\n"));
+                                break;
+                            }       
+                        }
+                    }
+                    else if (intermediate_st.request_type == MSG_DATA)
+                    {
+                        int sent_msg_size;
+                        if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                        {
+                            fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                            send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                            goto End;
+                        }
+                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+
+                        printf(GREEN("Sent intermediate request\n"));
+
+                        if (intermediate_st.request_type == FAIL)
+                        {
+                            printf(RED("Client failed to receive image\n"));
+                        }       
+                    }
+                    else if (intermediate_st.request_type == AUDIO_DATA)
+                    {
+                        int sent_msg_size;
+                        if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                        {
+                            fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                            send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                            goto End;
+                        }
+                        insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+
+                        printf(GREEN("Sent intermediate request\n"));
+
+                        while (1)
+                        {
+                            memset(intermediate_st.data, 0, MAX_DATA_LEN);
+
+                            int recvd_msg_size;
+                            if ((recvd_msg_size = recv(sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                            {
+                                fprintf(stderr, REDB("recv  : %s\n"), strerror(errno));
+                                send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                                insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                                goto End;
+                            }
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_RECV, recvd_request.username, recvd_request.ip);
+                            
+                            int sent_msg_size;
+                            if ((sent_msg_size = send(client2_sock_fd, &intermediate_st, sizeof(st_request), 0)) <= 0)
+                            {
+                                fprintf(stderr, REDB("send : could not send data to client 2 : %s\n"), strerror(errno));
+                                send_ack(REQ_UNSERVICED, sock_fd, strerror(errno));
+                                insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
+                                goto End;
+                            }
+                            insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INTER_REQ_SEND, recvd_request.username, recvd_request.ip);
+
+                            printf(GREEN("Sent intermediate request\n"));
+
+                            if (intermediate_st.request_type == AUDIO_DATA_END)
+                            {
+                                printf(GREEN("Received audio data end\n"));
+                                break;
+                            }
+
+                            if (intermediate_st.request_type == FAIL)
+                            {
+                                printf(RED("Client failed to receive audio\n"));
+                                break;
+                            }       
+                        }
+                    }
+                    else if (intermediate_st.request_type == FAIL)
                     {
                         printf(RED("Client failed to receive image\n"));
-                        break;
-                    }                
-
+                    }
+                    
                     close(client2_sock_fd);
                 }
                 else

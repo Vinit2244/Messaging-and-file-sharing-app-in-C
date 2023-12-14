@@ -6,4 +6,5 @@ pip install CTKMessageBox
 brew update
 brew install curl
 brew install jansson
+brew install sox
 
