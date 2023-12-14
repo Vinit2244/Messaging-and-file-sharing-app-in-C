@@ -550,7 +550,8 @@ void print_menu()
     printf(CYAN("5. Delete Account\n"));
     printf(CYAN("6. Send voice message\n"));
     printf(CYAN("7. Share a Screenshot\n"));
-    printf(CYAN("8. Exit\n"));
+    printf(CYAN("8. Capture and share a Photo\n"));
+    printf(CYAN("9. Exit\n"));
 
     printf(YELLOW("\nEnter your choice: "));
     fflush(stdout);
@@ -892,6 +893,9 @@ void menu()
 
         if (reply == ACK)
         {
+            // User is online
+            printf(GREEN("User to be sent screenshot to found!\n"));
+
             printf("Enter the delay after which the screenshot should be taken (in seconds): ");
             int delay;
             scanf("%d", &delay);
@@ -900,17 +904,13 @@ void menu()
 
             // Take screenshot and share
             char* file_name = "screenshot.png";
-            captureScreenshot(file_name);
-
-            // User is online
-            printf(GREEN("User to be sent screenshot to found!\n"));
+            capture_screenshot(file_name);
 
             printf(GREEN("Sending screenshot...\n"));
 
             send_file(file_name, socket_fd, to_username, IMG_DATA, IMG_DATA_END);
 
             printf(GREEN("Screenshot sent successfully!\n"));
-            remove(file_name);
             press_enter_to_contiue();
             return;
         }
@@ -924,6 +924,46 @@ void menu()
         }
     }
     else if (choice == 8)
+    {
+        printf("Enter the username of the person you want to share the photo with: ");
+        char to_username[1024] = {0};
+        scanf("%s", to_username);
+        
+        int socket_fd = connect_to_server();
+
+        int reply = check_if_user_is_online(socket_fd, FIND_USER, to_username);
+
+        if (reply == ACK)
+        {
+            // User is online
+            printf(GREEN("User to be sent screenshot to found!\n"));
+
+            printf("Enter the delay after which the photo should be captured (in seconds): ");
+            int delay;
+            scanf("%d", &delay);
+
+            // Take photo and share
+            char* file_name = "photo.png";
+            capture_image(file_name, delay);
+
+            printf(GREEN("Sending photo...\n"));
+
+            send_file(file_name, socket_fd, to_username, IMG_DATA, IMG_DATA_END);
+
+            printf(GREEN("Photo sent successfully!\n"));
+            press_enter_to_contiue();
+            return;
+        }
+        else
+        {
+            // Send Image request failed
+            printf(RED("Send Photo request failed!\n"));
+            close(socket_fd);
+            press_enter_to_contiue();
+            return;
+        }
+    }
+    else if (choice == 9)
     {
         // exit
         printf(ORANGE("Exiting...\n"));
@@ -1116,7 +1156,7 @@ void play_audio(const char *filename)
 }
 
 // Captures a screenshot and saves it to the provided filename
-void captureScreenshot(char *filename)
+void capture_screenshot(char *filename)
 {
     char command[256] = {0};
     sprintf(command, "screencapture %s", filename);
@@ -1130,5 +1170,23 @@ void captureScreenshot(char *filename)
     else
     {
         fprintf(stderr, RED("Error capturing screenshot.\n"));
+    }
+}
+
+// Captures an image using the webcam and saves it to the provided filename
+void capture_image(char *filename, int time)
+{
+    char command[256];
+    sprintf(command, "imagesnap -q -w %d %s", time, filename);
+
+    int result = system(command);
+
+    if (result == 0)
+    {
+        printf(GREEN("Image captured successfully.\n"));
+    }
+    else
+    {
+        fprintf(stderr, RED("Error capturing image.\n"));
     }
 }

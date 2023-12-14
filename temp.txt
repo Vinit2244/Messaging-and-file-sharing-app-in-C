@@ -7,4 +7,5 @@ brew update
 brew install curl
 brew install jansson
 brew install sox
+brew install imagesnap
 
