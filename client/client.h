@@ -23,6 +23,7 @@ void send_file(char* file_path, int socket_fd, char* to_username, int flag, int 
 void receive_data(int sock_fd, st_request recvd_data, int flag, int end_flag);
 void play_audio(const char *filename);
 void* receive_client_data(void* args);
+void captureScreenshot(char *filename);
 
 extern struct sockaddr_in client_address;       // IPv4 address struct for TCP communication between ss and nfs (requests)
 extern int client_sock_fd;

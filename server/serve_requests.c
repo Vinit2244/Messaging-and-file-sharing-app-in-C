@@ -202,7 +202,7 @@ void* serve_request(void* args)
                     if (clients_list[i].online == ONLINE)
                     {
                         // Client is already online
-                        send_ack(SIGNIN_FAILED, sock_fd, REDB("Client is already online\n"));
+                        send_ack(SIGNIN_FAILED, sock_fd, "Client is already online\n");
                         insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, SIGNIN_FAILED, recvd_request.username, recvd_request.ip);
                         goto End;
                     }
@@ -229,7 +229,7 @@ void* serve_request(void* args)
         if (flag == 0)
         {
             // Username does not exist
-            send_ack(SIGNIN_FAILED, sock_fd, REDB("Username does not exist\n"));
+            send_ack(SIGNIN_FAILED, sock_fd, "Username does not exist\n");
             insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, SIGNIN_FAILED, recvd_request.username, recvd_request.ip);
             goto End;
         }
@@ -261,7 +261,7 @@ void* serve_request(void* args)
         if (flag == 1)
         {
             // Username already exists
-            send_ack(SIGNUP_FAILED, sock_fd, REDB("Username already exists\n"));
+            send_ack(SIGNUP_FAILED, sock_fd, "Username already exists\n");
             insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, SIGNUP_FAILED, recvd_request.username, recvd_request.ip);
             goto End;
         }
@@ -291,7 +291,7 @@ void* serve_request(void* args)
                 }
             }
 
-            send_ack(SIGNUP_FAILED, sock_fd, REDB("Server is full\n"));
+            send_ack(SIGNUP_FAILED, sock_fd, "Server is full\n");
             insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, SIGNUP_FAILED, recvd_request.username, recvd_request.ip);
         }
     }
@@ -319,7 +319,7 @@ void* serve_request(void* args)
         }
 
         // Username not found
-        send_ack(SIGNOUT_FAILED, sock_fd, REDB("Username does not exist\n"));
+        send_ack(SIGNOUT_FAILED, sock_fd, "Username does not exist\n");
     }
     else if (recvd_request.request_type == DELETE_ACCOUNT)
     {
@@ -341,7 +341,7 @@ void* serve_request(void* args)
                 if (strcmp(clients_list[i].client_password, recvd_request.data) != 0)
                 {
                     // Password did not match
-                    send_ack(DELETE_FAILED, sock_fd, REDB("Incorrect password\n"));
+                    send_ack(DELETE_FAILED, sock_fd, "Incorrect password\n");
                     insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, DELETE_FAILED, recvd_request.username, recvd_request.ip);
                     goto End;
                 }
@@ -354,7 +354,7 @@ void* serve_request(void* args)
         }
 
         // Username not found
-        send_ack(DELETE_FAILED, sock_fd, REDB("Username does not exist\n"));
+        send_ack(DELETE_FAILED, sock_fd, "Username does not exist\n");
         insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, DELETE_FAILED, recvd_request.username, recvd_request.ip);
     }
     else if (recvd_request.request_type == FIND_USER)
@@ -453,7 +453,7 @@ void* serve_request(void* args)
 
                             if (intermediate_st.request_type == FAIL)
                             {
-                                printf(RED("Client failed to receive image\n"));
+                                fprintf(stderr, RED("Client failed to receive image\n"));
                                 break;
                             }       
                         }
@@ -506,7 +506,7 @@ void* serve_request(void* args)
 
                             if (intermediate_st.request_type == FAIL)
                             {
-                                printf(RED("Client failed to receive file\n"));
+                                fprintf(stderr, RED("Client failed to receive file\n"));
                                 break;
                             }       
                         }
@@ -527,7 +527,7 @@ void* serve_request(void* args)
 
                         if (intermediate_st.request_type == FAIL)
                         {
-                            printf(RED("Client failed to receive image\n"));
+                            fprintf(stderr, RED("Client failed to receive image\n"));
                         }       
                     }
                     else if (intermediate_st.request_type == AUDIO_DATA)
@@ -578,14 +578,14 @@ void* serve_request(void* args)
 
                             if (intermediate_st.request_type == FAIL)
                             {
-                                printf(RED("Client failed to receive audio\n"));
+                                fprintf(stderr, RED("Client failed to receive audio\n"));
                                 break;
                             }       
                         }
                     }
                     else if (intermediate_st.request_type == FAIL)
                     {
-                        printf(RED("Client failed to receive image\n"));
+                        fprintf(stderr, RED("Client failed to receive image\n"));
                     }
                     
                     close(client2_sock_fd);
@@ -594,7 +594,7 @@ void* serve_request(void* args)
                 {
                     st_request req;
                     req.request_type = CLIENT_OFFLINE;
-                    send_ack(CLIENT_OFFLINE, sock_fd, RED("Client is offline\n"));
+                    send_ack(CLIENT_OFFLINE, sock_fd, "Client is offline\n");
                     insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, CLIENT_OFFLINE, recvd_request.username, recvd_request.ip);
                     goto End;
                 }
@@ -602,16 +602,16 @@ void* serve_request(void* args)
         }
 
         // Username not found
-        send_ack(INVALID_USER, sock_fd, REDB("Username does not exist\n"));
+        send_ack(INVALID_USER, sock_fd, "Username does not exist\n");
         insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, INVALID_USER, recvd_request.username, recvd_request.ip);
     }
     else
     {
-        printf(REDB("Invalid request type received.\n"));
+        fprintf(stderr, REDB("Invalid request type received.\n"));
         printf("Data : %s\n\n", recvd_request.data);
 
         // Invalid request
-        send_ack(REQ_UNSERVICED, sock_fd, REDB("Invalid request type\n"));
+        send_ack(REQ_UNSERVICED, sock_fd, "Invalid request type\n");
         insert_log(recvd_request.recv_port_no, recvd_request.request_type, recvd_request.data, REQ_UNSERVICED, recvd_request.username, recvd_request.ip);
     }
 
