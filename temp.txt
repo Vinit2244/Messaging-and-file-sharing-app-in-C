@@ -9,3 +9,9 @@ brew install jansson
 brew install sox
 brew install imagesnap
 
+brew tap homebrew/cask-versions
+brew install --cask mysql-connector-c
+
+brew install mysql-client
+brew install mysql
+

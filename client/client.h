@@ -6,6 +6,9 @@
 extern char* my_ip;
 extern int credentials_saved;
 extern char clear[10];
+extern struct sockaddr_in client_address;       // IPv4 address struct for TCP communication between ss and nfs (requests)
+extern int client_sock_fd;
+extern int logged_in;
 
 int send_signup_req();
 int send_signin_req();
@@ -25,9 +28,5 @@ void play_audio(const char *filename);
 void* receive_client_data(void* args);
 void capture_screenshot(char *filename);
 void capture_image(char *filename, int time);
-
-extern struct sockaddr_in client_address;       // IPv4 address struct for TCP communication between ss and nfs (requests)
-extern int client_sock_fd;
-extern int logged_in;
 
 #endif
